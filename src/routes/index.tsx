@@ -110,9 +110,13 @@ function Index() {
                 </div>
               </div>
               <div className="col-span-4 md:col-span-1">
-                <div className="h-3 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-ink transition-all duration-500" style={{ width: `${val}%` }} />
-                </div>
+                {m.rated ? (
+                  <div className="h-3 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full bg-ink transition-all duration-500" style={{ width: `${val}%` }} />
+                  </div>
+                ) : (
+                  <span className="text-xs font-semibold text-muted-foreground md:invisible">not rated yet</span>
+                )}
               </div>
               <div className="hidden font-display text-2xl font-extrabold md:block">{m.rated ? val || "—" : <span className="text-xs font-semibold text-muted-foreground">not rated yet</span>}</div>
               <div className="hidden text-right font-mono text-xs md:block">{fmtUsd(blendedPrice(m))}<div className="text-muted-foreground">blended /1M</div></div>
