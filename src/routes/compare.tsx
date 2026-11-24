@@ -23,7 +23,10 @@ export const Route = createFileRoute("/compare")({
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
 function Radar({ models }: { models: Model[] }) {
-  const R = 120, c = 150, n = ACTIVITIES.length;
+  // Only draw axes that at least one chosen model actually has data for — empty axes just flatten every shape.
+  const axes = ACTIVITIES.filter((a) => models.some((m) => m.scores[a.id] > 0));
+  const R = 120, c = 150, n = axes.length;
+  if (n < 3) return <Bars models={models} axes={axes} />;
   const pt = (i: number, v: number) => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2;
     return [c + Math.cos(a) * R * (v / 100), c + Math.sin(a) * R * (v / 100)] as const;
@@ -31,16 +34,34 @@ function Radar({ models }: { models: Model[] }) {
   return (
     <svg viewBox="0 0 300 300" className="w-full max-w-sm">
       {[25, 50, 75, 100].map((r) => (
-        <polygon key={r} points={ACTIVITIES.map((_, i) => pt(i, r).join(",")).join(" ")} fill="none" stroke="var(--border)" />
+        <polygon key={r} points={axes.map((_, i) => pt(i, r).join(",")).join(" ")} fill="none" stroke="var(--border)" />
       ))}
-      {ACTIVITIES.map((a, i) => { const [x, y] = pt(i, 118); return <text key={a.id} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground font-mono text-[10px]">{a.label}</text>; })}
+      {axes.map((a, i) => { const [x, y] = pt(i, 118); return <text key={a.id} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground font-mono text-[10px]">{a.label}</text>; })}
       {models.map((m, k) => {
-        const vals = ACTIVITIES.map((a) => m.scores[a.id]);
+        const vals = axes.map((a) => m.scores[a.id]);
         if (!vals.some((v) => v > 0)) return null;
         // Floor unrated axes at a small radius so the shape stays visible instead of collapsing to a point.
         return <polygon key={m.id} points={vals.map((v, i) => pt(i, Math.max(v, 6)).join(",")).join(" ")} fill={COLORS[k]} fillOpacity={0.25} stroke={COLORS[k]} strokeWidth={2.5} />;
       })}
     </svg>
+  );
+}
+
+function Bars({ models, axes }: { models: Model[]; axes: typeof ACTIVITIES }) {
+  if (!axes.length) return <p className="max-w-sm text-sm text-muted-foreground">None of these models have benchmark scores yet.</p>;
+  return (
+    <div className="w-full max-w-sm space-y-4">
+      {axes.map((a) => (
+        <div key={a.id}>
+          <div className="mb-1 font-mono text-xs uppercase text-muted-foreground">{a.label}</div>
+          {models.map((m, k) => (
+            <div key={m.id} className="mb-1 h-3 rounded-full bg-muted">
+              <div className="h-3 rounded-full" style={{ width: `${m.scores[a.id]}%`, background: COLORS[k] }} />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -50,12 +71,13 @@ function Compare() {
   const { data: { models: MODELS } } = useSuspenseQuery(modelsQuery);
   const chosen = (ids ? ids.split(",") : (["openai", "anthropic", "google"] as const).map((p) => MODELS.find((m) => m.provider === p)?.id ?? "")).map((id) => getModel(MODELS, id)).filter((m): m is NonNullable<typeof m> => !!m).slice(0, 4);
   const set = (list: string[]) => navigate({ search: { ids: list.join(",") || undefined } });
-  const best = (f: (m: (typeof chosen)[number]) => number, low = false) => { const v = chosen.map(f); return low ? Math.min(...v) : Math.max(...v); };
+  // Missing values (0) never win a row.
+  const best = (f: (m: (typeof chosen)[number]) => number, low = false) => { const v = chosen.map(f).filter((x) => x > 0); return v.length ? (low ? Math.min(...v) : Math.max(...v)) : NaN; };
 
   const rows: { label: string; get: (m: (typeof chosen)[number]) => number; show: (v: number) => string; low?: boolean }[] = [
     { label: "Overall", get: (m) => (m.rated ? overall(m) : 0), show: (v) => (v ? String(v) : "not rated") },
     { label: "Released", get: (m) => Date.parse(m.released), show: (v) => new Date(v).toISOString().slice(0, 10) },
-    ...ACTIVITIES.map((a) => ({ label: a.label, get: (m: (typeof chosen)[number]) => m.scores[a.id], show: (v: number) => (v ? String(v) : "—") })),
+    ...ACTIVITIES.filter((a) => a.id !== "speed" && chosen.some((m) => m.scores[a.id] > 0)).map((a) => ({ label: a.label, get: (m: (typeof chosen)[number]) => m.scores[a.id], show: (v: number) => (v ? String(v) : "—") })),
     { label: "Input /1M", get: (m) => m.inputPrice, show: fmtUsd, low: true },
     { label: "Output /1M", get: (m) => m.outputPrice, show: fmtUsd, low: true },
     { label: "Context", get: (m) => m.context, show: fmtCtx },
@@ -80,7 +102,7 @@ function Compare() {
       </div>
 
       {chosen.length === 0 ? <p className="mt-10 text-muted-foreground">Pick a model above to start.</p> : (
-        <div className="mt-8 grid gap-6 lg:grid-cols-[auto_1fr]">
+        <div className="mt-8 grid gap-6 xl:grid-cols-[auto_1fr]">
           <div className="pop rounded-3xl bg-card p-6">
             <Radar models={chosen} />
             <div className="mt-2 flex flex-wrap gap-3 text-sm">

@@ -111,13 +111,14 @@ export const blendedPrice = (m: Model) => (m.inputPrice * 3 + m.outputPrice) / 4
 export const workloadCost = (m: Model, inputTokens: number, outputTokens: number) =>
   (m.inputPrice * inputTokens + m.outputPrice * outputTokens) / 1_000_000;
 
+/** Overall skill: average of the rated skills. Speed is excluded — fast isn't the same as good. */
 export const overall = (m: Model) => {
-  const s = Object.values(m.scores).filter((v) => v > 0);
+  const s = ACTIVITIES.filter((a) => a.id !== "speed").map((a) => m.scores[a.id]).filter((v) => v > 0);
   if (!s.length) return 0;
   return Math.round(s.reduce((a, b) => a + b, 0) / s.length);
 };
 
-export const fmtCtx = (n: number) => (n >= 1_000_000 ? `${n / 1_000_000}M` : `${Math.round(n / 1000)}K`);
+export const fmtCtx = (n: number) => (n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}K`);
 export const fmtUsd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : n < 1 ? `$${n.toFixed(3)}` : `$${n.toFixed(2)}`);
 
 /** Entry from the Artificial Analysis language model list. */

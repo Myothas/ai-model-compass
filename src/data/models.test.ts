@@ -31,3 +31,11 @@ describe("benchmarks", () => {
     expect(applyBenchmarks(base, [aa("gpt-9-mini", 50)])[0]!.rated).toBe(false);
   });
 });
+
+describe("overall score", () => {
+  it("ignores speed", async () => {
+    const { overall } = await import("./models");
+    const m = { scores: { coding: 60, reasoning: 80, writing: 0, math: 0, vision: 0, speed: 100 } } as never;
+    expect(overall(m)).toBe(70);
+  });
+});

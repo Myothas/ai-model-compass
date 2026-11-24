@@ -4,13 +4,24 @@ import { MODELS, applyBenchmarks, mapLive, type AaModel, type Model, type RawMod
 
 const AA_GATEWAY = "https://connector-gateway.lovable.dev/udc_artificial_analysis_4";
 
+// Artificial Analysis rate-limits the free plan hard, so keep the last good result in memory and reuse it.
+let aaCache: { at: number; data: AaModel[] } | undefined;
+const AA_TTL = 6 * 60 * 60 * 1000;
+
 async function fetchBenchmarks(): Promise<AaModel[]> {
+  if (aaCache && Date.now() - aaCache.at < AA_TTL) return aaCache.data;
+  const fresh = await fetchBenchmarksRaw();
+  if (fresh.length) aaCache = { at: Date.now(), data: fresh };
+  return fresh.length ? fresh : aaCache?.data ?? [];
+}
+
+async function fetchBenchmarksRaw(): Promise<AaModel[]> {
   const lovableKey = process.env["LOVABLE_API_KEY"], aaKey = process.env["UDC_ARTIFICIAL_ANALYSIS_4_API_KEY"];
   if (!lovableKey || !aaKey) { console.error("benchmark keys missing"); return []; }
   const out: AaModel[] = [];
   for (let page = 1; page <= 10; page++) {
     const res = await fetch(`${AA_GATEWAY}/language/models/free?page=${page}`, { headers: { Authorization: `Bearer ${lovableKey}`, "X-Connection-Api-Key": aaKey } });
-    if (!res.ok) { console.error(`benchmarks failed [${res.status}]: ${await res.text()}`); break; }
+    if (!res.ok) { console.error(`benchmarks failed [${res.status}]: ${await res.text()}`); return []; }
     const body = (await res.json()) as { data: AaModel[]; pagination?: { has_more?: boolean } };
     out.push(...body.data);
     if (!body.pagination?.has_more) break;
