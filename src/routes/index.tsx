@@ -61,9 +61,9 @@ function Index() {
         <h2 className="font-display text-2xl font-bold">What do you need it for?</h2>
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-9">
           {([{ id: "newest", label: "Newest", blurb: "Latest releases first" }, { id: "overall", label: "All-round", blurb: "Average of every skill" }, ...ACTIVITIES, { id: "price", label: "Cheapest", blurb: "Lowest blended price" }, { id: "value", label: "Best value", blurb: "Quality per dollar" }] as { id: Sort; label: string; blurb: string }[]).map((a) => (
-            <button key={a.id} onClick={() => setSort(a.id)} className={`rounded-2xl border-2 border-ink p-3 text-left transition ${sort === a.id ? "bg-accent shadow-pop -translate-x-0.5 -translate-y-0.5" : "bg-card hover:bg-secondary"}`}>
-              <div className="font-display font-bold">{a.label}</div>
-              <div className="mt-1 text-xs text-muted-foreground">{a.blurb}</div>
+            <button key={a.id} onClick={() => setSort(a.id)} className={`flex flex-col items-start rounded-2xl border-2 border-ink p-3 text-left transition ${sort === a.id ? "bg-accent shadow-pop -translate-x-0.5 -translate-y-0.5" : "bg-card hover:bg-secondary"}`}>
+              <div className="font-display font-bold leading-tight">{a.label}</div>
+              <div className="mt-1 text-xs leading-tight text-muted-foreground">{a.blurb}</div>
             </button>
           ))}
         </div>
