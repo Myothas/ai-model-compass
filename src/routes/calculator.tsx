@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { MODELS, PROVIDERS, fmtUsd, workloadCost } from "@/data/models";
+import { PROVIDERS, fmtUsd, workloadCost } from "@/data/models";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { modelsQuery } from "@/data/live.functions";
 import { ProviderLogo } from "@/components/site/chrome";
 
 export const Route = createFileRoute("/calculator")({
@@ -14,6 +16,7 @@ export const Route = createFileRoute("/calculator")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  loader: ({ context }) => context.queryClient.ensureQueryData(modelsQuery),
   component: Calc,
 });
 
@@ -27,6 +30,7 @@ function Slider({ label, value, set, min, max, step, fmt }: { label: string; val
 }
 
 function Calc() {
+  const { data: { models: MODELS } } = useSuspenseQuery(modelsQuery);
   const [req, setReq] = useState(1000);
   const [inTok, setIn] = useState(1500);
   const [outTok, setOut] = useState(500);

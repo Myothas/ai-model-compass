@@ -1,5 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ACTIVITIES, MODELS, PROVIDERS, fmtCtx, fmtUsd, getModel, overall } from "@/data/models";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { modelsQuery } from "@/data/live.functions";
+import { ACTIVITIES, PROVIDERS, type Model, fmtCtx, fmtUsd, getModel, overall } from "@/data/models";
 import { ProviderLogo } from "@/components/site/chrome";
 
 export const Route = createFileRoute("/compare")({
@@ -14,12 +16,13 @@ export const Route = createFileRoute("/compare")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  loader: ({ context }) => context.queryClient.ensureQueryData(modelsQuery),
   component: Compare,
 });
 
 const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
-function Radar({ models }: { models: typeof MODELS }) {
+function Radar({ models }: { models: Model[] }) {
   const R = 120, c = 150, n = ACTIVITIES.length;
   const pt = (i: number, v: number) => {
     const a = (Math.PI * 2 * i) / n - Math.PI / 2;
@@ -41,17 +44,19 @@ function Radar({ models }: { models: typeof MODELS }) {
 function Compare() {
   const { ids } = Route.useSearch();
   const navigate = useNavigate({ from: "/compare" });
-  const chosen = (ids ? ids.split(",") : ["gpt-5", "claude-sonnet-4-5", "gemini-2-5-pro"]).map(getModel).filter((m): m is NonNullable<typeof m> => !!m).slice(0, 4);
+  const { data: { models: MODELS } } = useSuspenseQuery(modelsQuery);
+  const chosen = (ids ? ids.split(",") : (["openai", "anthropic", "google"] as const).map((p) => MODELS.find((m) => m.provider === p)?.id ?? "")).map((id) => getModel(MODELS, id)).filter((m): m is NonNullable<typeof m> => !!m).slice(0, 4);
   const set = (list: string[]) => navigate({ search: { ids: list.join(",") || undefined } });
   const best = (f: (m: (typeof chosen)[number]) => number, low = false) => { const v = chosen.map(f); return low ? Math.min(...v) : Math.max(...v); };
 
   const rows: { label: string; get: (m: (typeof chosen)[number]) => number; show: (v: number) => string; low?: boolean }[] = [
-    { label: "Overall", get: overall, show: String },
+    { label: "Overall", get: (m) => (m.rated ? overall(m) : 0), show: (v) => (v ? String(v) : "not rated") },
+    { label: "Released", get: (m) => Date.parse(m.released), show: (v) => new Date(v).toISOString().slice(0, 10) },
     ...ACTIVITIES.map((a) => ({ label: a.label, get: (m: (typeof chosen)[number]) => m.scores[a.id], show: (v: number) => (v ? String(v) : "—") })),
     { label: "Input /1M", get: (m) => m.inputPrice, show: fmtUsd, low: true },
     { label: "Output /1M", get: (m) => m.outputPrice, show: fmtUsd, low: true },
     { label: "Context", get: (m) => m.context, show: fmtCtx },
-    { label: "Tokens/sec", get: (m) => m.tokensPerSec, show: String },
+    { label: "Tokens/sec", get: (m) => m.tokensPerSec, show: (v) => (v ? String(v) : "—") },
   ];
 
   return (

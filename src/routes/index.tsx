@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { ACTIVITIES, MODELS, PROVIDERS, blendedPrice, fmtCtx, fmtUsd, overall, type Activity } from "@/data/models";
+import { ACTIVITIES, PROVIDERS, blendedPrice, fmtCtx, fmtUsd, overall, type Activity } from "@/data/models";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { modelsQuery } from "@/data/live.functions";
 import { ProviderLogo } from "@/components/site/chrome";
 
 export const Route = createFileRoute("/")({
@@ -14,22 +16,24 @@ export const Route = createFileRoute("/")({
       { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
+  loader: ({ context }) => context.queryClient.ensureQueryData(modelsQuery),
   component: Index,
 });
 
-type Sort = Activity | "overall" | "price" | "value";
+type Sort = Activity | "newest" | "overall" | "price" | "value";
 
 function Index() {
-  const [sort, setSort] = useState<Sort>("overall");
+  const [sort, setSort] = useState<Sort>("newest");
   const [openOnly, setOpenOnly] = useState(false);
   const [provider, setProvider] = useState<string>("all");
   const [picked, setPicked] = useState<string[]>([]);
 
+  const { data: { models: MODELS, live, fetchedAt } } = useSuspenseQuery(modelsQuery);
   const rows = useMemo(() => {
     const score = (m: (typeof MODELS)[number]) =>
-      sort === "overall" ? overall(m) : sort === "price" ? -blendedPrice(m) : sort === "value" ? overall(m) / Math.log2(2 + blendedPrice(m)) : m.scores[sort];
+      sort === "newest" ? Date.parse(m.released) : sort === "overall" ? overall(m) : sort === "price" ? -blendedPrice(m) : sort === "value" ? overall(m) / Math.log2(2 + blendedPrice(m)) : m.scores[sort];
     return MODELS.filter((m) => (!openOnly || m.openWeights) && (provider === "all" || m.provider === provider)).sort((a, b) => score(b) - score(a));
-  }, [sort, openOnly, provider]);
+  }, [sort, openOnly, provider, MODELS]);
 
   const top = rows[0];
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= 4 ? p : [...p, id]));
@@ -38,7 +42,7 @@ function Index() {
   return (
     <main className="mx-auto max-w-6xl px-4">
       <section className="grid-paper relative mt-6 overflow-hidden rounded-3xl border-2 border-ink bg-card px-6 py-14 md:px-12">
-        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{MODELS.length} models · {Object.keys(PROVIDERS).length} providers · always free</p>
+        <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{MODELS.length} models · {Object.keys(PROVIDERS).length} providers · {live ? `live prices, updated ${new Date(fetchedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "offline copy"} · always free</p>
         <h1 className="mt-3 max-w-3xl font-display text-5xl font-extrabold leading-[0.95] tracking-tight md:text-7xl animate-rise">
           Which AI is best for <span className="rounded-xl bg-accent px-2">what you do?</span>
         </h1>
@@ -54,8 +58,8 @@ function Index() {
 
       <section className="mt-10">
         <h2 className="font-display text-2xl font-bold">What do you need it for?</h2>
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-8">
-          {([{ id: "overall", label: "All-round", blurb: "Average of every skill" }, ...ACTIVITIES, { id: "price", label: "Cheapest", blurb: "Lowest blended price" }, { id: "value", label: "Best value", blurb: "Quality per dollar" }] as { id: Sort; label: string; blurb: string }[]).map((a) => (
+        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-9">
+          {([{ id: "newest", label: "Newest", blurb: "Latest releases first" }, { id: "overall", label: "All-round", blurb: "Average of every skill" }, ...ACTIVITIES, { id: "price", label: "Cheapest", blurb: "Lowest blended price" }, { id: "value", label: "Best value", blurb: "Quality per dollar" }] as { id: Sort; label: string; blurb: string }[]).map((a) => (
             <button key={a.id} onClick={() => setSort(a.id)} className={`rounded-2xl border-2 border-ink p-3 text-left transition ${sort === a.id ? "bg-accent shadow-pop -translate-x-0.5 -translate-y-0.5" : "bg-card hover:bg-secondary"}`}>
               <div className="font-display font-bold">{a.label}</div>
               <div className="mt-1 text-xs text-muted-foreground">{a.blurb}</div>
@@ -90,7 +94,7 @@ function Index() {
 
       <section className="mt-4 overflow-hidden rounded-3xl border-2 border-ink bg-card">
         {rows.map((m, i) => {
-          const val = sort === "overall" || sort === "value" || sort === "price" ? overall(m) : m.scores[sort];
+          const val = !m.rated ? 0 : sort === "overall" || sort === "value" || sort === "price" || sort === "newest" ? overall(m) : m.scores[sort];
           return (
             <div key={m.id} className="grid grid-cols-[auto_auto_1fr_auto] items-center gap-4 border-b border-border px-4 py-4 last:border-0 md:grid-cols-[2rem_auto_1.4fr_2fr_auto_auto]">
               <input type="checkbox" aria-label={`Compare ${m.name}`} checked={picked.includes(m.id)} onChange={() => toggle(m.id)} className="h-4 w-4 accent-[var(--ink)]" />
@@ -100,7 +104,7 @@ function Index() {
                   <span className="mr-2 font-mono text-sm text-muted-foreground">#{i + 1}</span>{m.name}
                 </Link>
                 <div className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                  <span>{PROVIDERS[m.provider]!.name}</span>·<span>{fmtCtx(m.context)} context</span>
+                  <span>{PROVIDERS[m.provider]!.name}</span>·<span>{fmtCtx(m.context)} context</span>·<span>{m.released}</span>
                   {m.openWeights && <span className="rounded-full bg-accent px-2 font-semibold text-accent-foreground">open</span>}
                 </div>
               </div>
@@ -109,7 +113,7 @@ function Index() {
                   <div className="h-full rounded-full bg-ink transition-all duration-500" style={{ width: `${val}%` }} />
                 </div>
               </div>
-              <div className="hidden font-display text-2xl font-extrabold md:block">{val || "—"}</div>
+              <div className="hidden font-display text-2xl font-extrabold md:block">{m.rated ? val || "—" : <span className="text-xs font-semibold text-muted-foreground">not rated yet</span>}</div>
               <div className="hidden text-right font-mono text-xs md:block">{fmtUsd(blendedPrice(m))}<div className="text-muted-foreground">blended /1M</div></div>
             </div>
           );
