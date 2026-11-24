@@ -34,9 +34,12 @@ function Radar({ models }: { models: Model[] }) {
         <polygon key={r} points={ACTIVITIES.map((_, i) => pt(i, r).join(",")).join(" ")} fill="none" stroke="var(--border)" />
       ))}
       {ACTIVITIES.map((a, i) => { const [x, y] = pt(i, 118); return <text key={a.id} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground font-mono text-[10px]">{a.label}</text>; })}
-      {models.map((m, k) => (
-        <polygon key={m.id} points={ACTIVITIES.map((a, i) => pt(i, m.scores[a.id]).join(",")).join(" ")} fill={COLORS[k]} fillOpacity={0.25} stroke={COLORS[k]} strokeWidth={2.5} />
-      ))}
+      {models.map((m, k) => {
+        const vals = ACTIVITIES.map((a) => m.scores[a.id]);
+        if (!vals.some((v) => v > 0)) return null;
+        // Floor unrated axes at a small radius so the shape stays visible instead of collapsing to a point.
+        return <polygon key={m.id} points={vals.map((v, i) => pt(i, Math.max(v, 6)).join(",")).join(" ")} fill={COLORS[k]} fillOpacity={0.25} stroke={COLORS[k]} strokeWidth={2.5} />;
+      })}
     </svg>
   );
 }
@@ -83,6 +86,9 @@ function Compare() {
             <div className="mt-2 flex flex-wrap gap-3 text-sm">
               {chosen.map((m, k) => <span key={m.id} className="flex items-center gap-1.5"><span className="h-3 w-3 rounded-full" style={{ background: COLORS[k] }} />{m.name}</span>)}
             </div>
+            {chosen.some((m) => !Object.values(m.scores).some((v) => v > 0)) && (
+              <p className="mt-3 max-w-sm text-xs text-muted-foreground">Models with no shape aren't rated yet — benchmark scores arrive a few days after release.</p>
+            )}
           </div>
           <div className="overflow-x-auto rounded-3xl border-2 border-ink bg-card">
             <table className="w-full text-sm">
