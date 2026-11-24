@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MODELS, workloadCost, blendedPrice, mapLive } from "./models";
+import { MODELS, workloadCost, blendedPrice, mapLive, applyBenchmarks } from "./models";
 const gpt5 = MODELS.find((m) => m.id === "openai--gpt-5")!;
 describe("pricing", () => {
   it("workload cost uses per-million prices", () => { expect(workloadCost(gpt5, 1_000_000, 1_000_000)).toBeCloseTo(11.25); });
@@ -17,5 +17,17 @@ describe("live models", () => {
   });
   it("reuses hand-entered scores for matching models", () => {
     expect(mapLive([raw("openai/gpt-5", 1)])[0]!.rated).toBe(true);
+  });
+});
+describe("benchmarks", () => {
+  const base = mapLive([{ id: "openai/gpt-9", name: "OpenAI: GPT-9", created: 1, pricing: { prompt: "0.000001", completion: "0.000002" } }]);
+  const aa = (slug: string, i: number) => ({ slug, evaluations: { artificial_analysis_intelligence_index: i }, performance: { median_output_tokens_per_second: 100 } });
+  it("matches effort variants and keeps the best score", () => {
+    const [m] = applyBenchmarks(base, [aa("gpt-9-low", 25), aa("gpt-9-xhigh", 50)]);
+    expect(m!.rated).toBe(true);
+    expect(m!.scores.reasoning).toBe(100);
+  });
+  it("does not match a different model with the same prefix", () => {
+    expect(applyBenchmarks(base, [aa("gpt-9-mini", 50)])[0]!.rated).toBe(false);
   });
 });

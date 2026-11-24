@@ -112,9 +112,37 @@ export const workloadCost = (m: Model, inputTokens: number, outputTokens: number
   (m.inputPrice * inputTokens + m.outputPrice * outputTokens) / 1_000_000;
 
 export const overall = (m: Model) => {
-  const s = Object.values(m.scores);
+  const s = Object.values(m.scores).filter((v) => v > 0);
+  if (!s.length) return 0;
   return Math.round(s.reduce((a, b) => a + b, 0) / s.length);
 };
 
 export const fmtCtx = (n: number) => (n >= 1_000_000 ? `${n / 1_000_000}M` : `${Math.round(n / 1000)}K`);
 export const fmtUsd = (n: number) => (n < 0.01 ? `$${n.toFixed(4)}` : n < 1 ? `$${n.toFixed(3)}` : `$${n.toFixed(2)}`);
+
+/** Entry from the Artificial Analysis language model list. */
+export type AaModel = { slug: string; evaluations?: { artificial_analysis_intelligence_index?: number | null; artificial_analysis_coding_index?: number | null };
+  performance?: { median_output_tokens_per_second?: number | null } };
+
+const VARIANT = /^(-(non-reasoning|reasoning|minimal|low|medium|high|xhigh|max|thinking))*$/;
+
+/** Fill in scores from Artificial Analysis benchmarks. Indexes are scaled so the best model in the list scores 100. */
+export function applyBenchmarks(models: Model[], aa: AaModel[]): Model[] {
+  const scored = aa.filter((a) => a.evaluations?.artificial_analysis_intelligence_index != null);
+  if (!scored.length) return models;
+  const maxOf = (f: (a: AaModel) => number | null | undefined) => Math.max(1, ...scored.map((a) => f(a) ?? 0));
+  const maxI = maxOf((a) => a.evaluations?.artificial_analysis_intelligence_index);
+  const maxC = maxOf((a) => a.evaluations?.artificial_analysis_coding_index);
+  const maxS = maxOf((a) => a.performance?.median_output_tokens_per_second);
+  return models.map((m) => {
+    const key = (m.id.split("--")[1] ?? m.id).replace(/\./g, "-").toLowerCase();
+    const hits = scored.filter((a) => a.slug === key || (a.slug.startsWith(key + "-") && VARIANT.test(a.slug.slice(key.length))));
+    if (!hits.length) return m;
+    const best = hits.reduce((a, b) => ((b.evaluations!.artificial_analysis_intelligence_index ?? 0) > (a.evaluations!.artificial_analysis_intelligence_index ?? 0) ? b : a));
+    const pct = (v: number | null | undefined, max: number) => (v ? Math.round((v / max) * 100) : 0);
+    const tps = best.performance?.median_output_tokens_per_second ?? 0;
+    return { ...m, rated: true, tokensPerSec: tps ? Math.round(tps) : m.tokensPerSec,
+      scores: { coding: pct(best.evaluations?.artificial_analysis_coding_index, maxC), reasoning: pct(best.evaluations?.artificial_analysis_intelligence_index, maxI),
+        writing: 0, math: 0, vision: 0, speed: pct(tps, maxS) } };
+  });
+}

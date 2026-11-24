@@ -28,7 +28,7 @@ function Index() {
   const [provider, setProvider] = useState<string>("all");
   const [picked, setPicked] = useState<string[]>([]);
 
-  const { data: { models: MODELS, live, fetchedAt } } = useSuspenseQuery(modelsQuery);
+  const { data: { models: MODELS, live, benchmarks, fetchedAt } } = useSuspenseQuery(modelsQuery);
   const rows = useMemo(() => {
     const score = (m: (typeof MODELS)[number]) =>
       sort === "newest" ? Date.parse(m.released) : sort === "overall" ? overall(m) : sort === "price" ? -blendedPrice(m) : sort === "value" ? overall(m) / Math.log2(2 + blendedPrice(m)) : m.scores[sort];
@@ -54,6 +54,7 @@ function Index() {
             </div>
           ))}
         </div>
+        {benchmarks && <p className="mt-4 text-sm text-muted-foreground">Skill scores from <a href="https://artificialanalysis.ai" target="_blank" rel="noreferrer" className="font-semibold underline">Artificial Analysis</a>, scaled so the top model scores 100.</p>}
       </section>
 
       <section className="mt-10">
